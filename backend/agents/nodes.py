@@ -1,101 +1,125 @@
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 from agents.state import AgentState
-from neo4j_db import neo4j_conn
 from database import SessionLocal
 import models
 import os
+import concurrent.futures
 
 def orchestrator_node(state: AgentState):
     print(f"Orchestrator analyzing request for Patient ID: {state.get('patient_id')}")
     return {"current_agent": "patient_agent"}
 
 def patient_agent_node(state: AgentState):
-    print("Patient Agent retrieving patient history from MySQL & Neo4j...")
+    print("Patient Agent retrieving patient history from MySQL...")
     patient_id = state.get('patient_id', 1)
     
-    # Query MySQL for Real Patient Data
     db = SessionLocal()
-    patient = db.query(models.Patient).filter(models.Patient.patient_id == patient_id).first()
-    records = db.query(models.MedicalRecord).filter(models.MedicalRecord.patient_id == patient_id).all()
+    try:
+        patient = db.query(models.Patient).filter(models.Patient.patient_id == patient_id).first()
+        records = db.query(models.MedicalRecord).filter(models.MedicalRecord.patient_id == patient_id).all()
+        
+        patient_name = patient.name if patient else "Unknown"
+        patient_dob = patient.dob if patient else "Unknown"
+        
+        sql_history = ""
+        if records:
+            symptoms = [r.symptoms for r in records if r.symptoms]
+            meds = [r.medicines for r in records if r.medicines]
+            tests = [r.tests for r in records if r.tests]
+            sql_history = f"**Self-Reported Symptoms:** {', '.join(symptoms) if symptoms else 'None'}\n"
+            sql_history += f"**Current Medications:** {', '.join(meds) if meds else 'None'}\n"
+            sql_history += f"**Previous Tests:** {', '.join(tests) if tests else 'None'}\n"
+        
+        patient_data = {
+            "name": patient_name,
+            "dob": patient_dob,
+            "sql_history": sql_history,
+            "meds": ", ".join([r.medicines for r in records if r.medicines]) if records else "None",
+            "symptoms": ", ".join([r.symptoms for r in records if r.symptoms]) if records else "None"
+        }
+    finally:
+        db.close()
     
-    patient_name = patient.name if patient else "Unknown"
-    patient_dob = patient.dob if patient else "Unknown"
-    
-    sql_history = ""
-    if records:
-        symptoms = [r.symptoms for r in records if r.symptoms]
-        meds = [r.medicines for r in records if r.medicines]
-        tests = [r.tests for r in records if r.tests]
-        sql_history = f"**Self-Reported Symptoms:** {', '.join(symptoms) if symptoms else 'None'}\n"
-        sql_history += f"**Current Medications:** {', '.join(meds) if meds else 'None'}\n"
-        sql_history += f"**Previous Tests:** {', '.join(tests) if tests else 'None'}\n"
-    db.close()
-    
-    patient_data = {
-        "name": patient_name,
-        "dob": patient_dob,
-        "sql_history": sql_history,
-        "meds": ", ".join([r.medicines for r in records if r.medicines]) if records else "None",
-        "symptoms": ", ".join([r.symptoms for r in records if r.symptoms]) if records else "None"
-    }
     return {"patient_data": patient_data, "current_agent": "medical_agent"}
 
 def medical_agent_node(state: AgentState):
-    print("Medical Agent generating clinical guidelines via LLM...")
+    """Combined medical + safety check in ONE single LLM call to cut latency in half."""
+    print("Medical & Safety Agent running combined analysis via LLM...")
     p_data = state.get("patient_data", {})
-    
-    # Use Gemini to generate guidelines based on symptoms and meds
-    prompt = f"Patient {p_data.get('name')} is presenting with symptoms: {p_data.get('symptoms')}. They are currently taking: {p_data.get('meds')}. Provide 2-3 bullet points of standard medical guidelines or vitals to check for this presentation. Keep it highly concise, professional, and medical."
-    
+
+    symptoms = p_data.get('symptoms', 'None')
+    meds = p_data.get('meds', 'None')
+    name = p_data.get('name', 'Patient')
+
+    # One single prompt that does BOTH jobs simultaneously
+    prompt = f"""You are a clinical decision support AI. Analyze this patient in ONE response.
+
+Patient: {name}
+Symptoms: {symptoms}
+Medications: {meds}
+
+Respond in this exact format with no extra text:
+
+GUIDELINES:
+- [bullet 1]
+- [bullet 2]
+- [bullet 3]
+
+SAFETY: SAFE: [reason] OR FLAG: [reason]"""
+
+    from langchain_google_genai import ChatGoogleGenerativeAI
     llm = ChatGoogleGenerativeAI(model="gemini-flash-lite-latest")
+    
     try:
         response = llm.invoke(prompt)
         content = response.content
-        if isinstance(content, list) and len(content) > 0:
-            content = content[0].get("text", str(content)) if isinstance(content[0], dict) else str(content[0])
+        if isinstance(content, list):
+            content = content[0].get("text", str(content[0])) if isinstance(content[0], dict) else str(content[0])
         elif isinstance(content, dict):
             content = content.get("text", str(content))
         else:
             content = str(content)
-        guidelines = content
+
+        # Parse the combined response
+        guidelines = "Standard vitals check recommended."
+        safety_analysis = "SAFE: No major conflicts detected."
+
+        if "GUIDELINES:" in content and "SAFETY:" in content:
+            parts = content.split("SAFETY:")
+            guidelines = parts[0].replace("GUIDELINES:", "").strip()
+            safety_analysis = "SAFETY:" + parts[1].strip()
+        elif "GUIDELINES:" in content:
+            guidelines = content.replace("GUIDELINES:", "").strip()
+        else:
+            guidelines = content
+            
     except Exception as e:
         guidelines = "Standard vitals check recommended. Monitor for any acute changes."
-        
-    medical_data = {"guidelines": guidelines}
-    return {"medical_data": medical_data, "current_agent": "safety_agent"}
+        safety_analysis = "SAFE: No major conflicts detected based on available data."
+
+    is_safe = "FLAG" not in safety_analysis.upper() or "SAFE" in safety_analysis.split("FLAG")[0].upper()
+
+    medical_data = {
+        "guidelines": guidelines,
+        "safety_msg": safety_analysis
+    }
+    return {
+        "medical_data": medical_data,
+        "safety_approval": is_safe,
+        "current_agent": "summarizer"
+    }
 
 def safety_agent_node(state: AgentState):
-    print("Safety Agent cross-checking for dangerous conflicts...")
-    p_data = state.get("patient_data", {})
-    
-    # Use Gemini to check for conflicts
-    prompt = f"Patient {p_data.get('name')} takes the following medications: {p_data.get('meds')}. They have these symptoms: {p_data.get('symptoms')}. Are there any obvious dangerous drug interactions or contraindications? Respond with 'SAFE: <reason>' or 'FLAG: <reason>'. Be concise."
-    
-    llm = ChatGoogleGenerativeAI(model="gemini-flash-lite-latest")
-    try:
-        response = llm.invoke(prompt)
-        content = response.content
-        if isinstance(content, list) and len(content) > 0:
-            content = content[0].get("text", str(content)) if isinstance(content[0], dict) else str(content[0])
-        elif isinstance(content, dict):
-            content = content.get("text", str(content))
-        else:
-            content = str(content)
-        safety_analysis = content
-    except Exception as e:
-        safety_analysis = "SAFE: No major conflicts detected based on available data."
-        
-    is_safe = "SAFE" in safety_analysis.upper()
-    
-    return {"safety_approval": is_safe, "medical_data": {**state.get("medical_data", {}), "safety_msg": safety_analysis}, "current_agent": "summarizer"}
+    # Safety check is now done inside medical_agent_node in one combined call.
+    # This node is kept as a pass-through for graph compatibility.
+    return {}
 
 def summarizer_node(state: AgentState):
     p_data = state.get("patient_data", {})
     m_data = state.get("medical_data", {})
-    safe = state.get("safety_approval")
+    safe = state.get("safety_approval", True)
     
-    status_icon = "✅ APPROVED" if safe else "⚠️ FLAG: REVIEW REQUIRED"
+    status_icon = "✅ APPROVED" if safe else "🚨 FLAG: REVIEW REQUIRED"
     
     summary = f"""### CLINICAL SYNTHESIS REPORT
 Generated by MedFlow GraphRAG & LLM Engine
