@@ -9,7 +9,7 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyDCgcN9KHLtJljAqGT0iyCwhRiBGLEarDE
+      - NEXT_PUBLIC_FIREBASE_API_KEY=YOUR_FIREBASE_API_KEY_HERE
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
     depends_on:
@@ -73,21 +73,6 @@ services:
     volumes:
       - neo4j_data:/data
     networks:
-      - medflow-network
-
-  # 5. Workflow Automation (n8n)
-  n8n:
-    image: n8nio/n8n
-    ports:
-      - "5679:5678"
-    environment:
-      - N8N_HOST=0.0.0.0
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
-      - WEBHOOK_URL=http://n8n:5678/
-      - NODE_ENV=production
-    volumes:
-      - n8n_data:/home/node/.n8n
     networks:
       - medflow-network
 
@@ -95,7 +80,6 @@ volumes:
   # Persistent storage for our databases so data isn't lost on restart
   mysql_data:
   neo4j_data:
-  n8n_data:
 
 networks:
   # Custom network so containers can communicate using service names (e.g., "mysql")

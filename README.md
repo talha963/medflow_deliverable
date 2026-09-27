@@ -1,79 +1,83 @@
-# 🏥 MedFlow Clinic AI
+# 🏥 MedFlow Clinic AI 🤖
 
-<p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=700&size=24&pause=1000&color=2563EB&center=true&vCenter=true&width=600&height=50&lines=AI-Powered+Clinical+Synthesis;Automated+Revenue+Cycle+Management;Seamless+Healthcare+Experience" alt="Typing SVG" />
-</p>
-
-MedFlow Clinic transforms the traditional patient portal into a smart, efficient, and deeply integrated experience. By combining modern web technologies with powerful AI and automated workflows, it provides a seamless healthcare journey from initial booking to digital billing.
+**MedFlow Clinic AI** is an end-to-end, AI-powered clinical management platform built to modernize the patient journey. From intelligent appointment booking and real-time AI clinical diagnosis reports to automated billing and integrated payments, MedFlow represents the future of autonomous healthcare software.
 
 ---
 
-## ✨ Key Features
+## 🌟 Key Features
 
-### 🧑‍⚕️ For Patients
-* **Modern Booking Portal**: Clean, intuitive interface to book appointments, select time slots, and securely submit symptoms.
-* **Automated Confirmations**: Instant HTML emails the second a doctor approves an appointment.
-* **Digital Prescriptions**: Official, elegantly formatted medical prescriptions sent directly to the inbox.
-* **Online Billing**: Securely pay clinic bills online via automated Safepay checkout links.
-
-### 👨‍⚕️ For Doctors
-* **AI Clinical Synthesis**: Powered by GraphRAG and Gemini 3.5 AI, instantly query patient histories and synthesize comprehensive clinical reports.
-* **Patient History Timeline**: Beautiful, chronological visual roadmap of every past visit, prescription, and billing status directly on the dashboard.
-* **AI Medical Auto-Coding**: Gemini 3.5 Flash automatically reads symptoms and predicts exact ICD-10 and CPT billing codes for frictionless insurance processing.
-* **One-Click Prescriptions**: Write and issue prescriptions directly from the AI analysis screen.
-* **Revenue Cycle Management**: Generate bills and track financial performance in a beautiful, real-time dashboard.
+- **Multi-Agent AI Engine:** Leverages Google Gemini and LangGraph to analyze patient symptoms, cross-reference medical history, check safety conflicts, and generate comprehensive clinical reports in seconds.
+- **Smart Patient Booking:** Responsive, beautiful web portal for patients to book appointments and provide preliminary health data.
+- **AI Medical Billing:** Automatically suggests **ICD-10** (Diagnosis) and **CPT** (Procedure) codes based on the patient's medical history.
+- **Integrated Payments:** Built-in Safepay checkout for secure online transactions with automated payment confirmation and status updates on the dashboard.
+- **Doctor Portal:** Role-based dashboard with Dark/Light mode, patient timelines, and real-time revenue tracking.
+- **Dual Databases:** Relational data stored securely in **MySQL**, with complex clinical relationships mapped in **Neo4j** (Graph Database).
+- **Containerized Architecture:** Fully dockerized for seamless, one-command deployment anywhere.
 
 ---
 
 ## 🛠️ Technology Stack
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js&logoColor=white" />
-  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" />
-  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=FastAPI&logoColor=white" />
-  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/MySQL-005C84?style=for-the-badge&logo=mysql&logoColor=white" />
-  <img src="https://img.shields.io/badge/Neo4j-018bff?style=for-the-badge&logo=neo4j&logoColor=white" />
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" />
-</p>
+- **Frontend:** Next.js (React), Tailwind CSS
+- **Backend:** Python, FastAPI, SQLAlchemy
+- **AI / LLMs:** Google Gemini API, LangGraph, LangChain
+- **Databases:** MySQL 8.0, Neo4j 5.11
+- **Authentication:** Firebase Auth
+- **Infrastructure:** Docker, Docker Compose
+- **Payments:** Safepay (Sandbox)
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Setup & Installation Guide
+
+Follow these steps to deploy MedFlow Clinic AI locally using Docker.
 
 ### 1. Prerequisites
-* **Docker & Docker Compose** installed.
-* **API Keys**: Google Gemini API Key & Safepay Sandbox Keys.
+- **Docker Desktop** installed and running on your machine.
+- **Git** installed.
+- (Optional) A Firebase account for Doctor authentication.
 
-### 2. Environment Setup
-Create a `.env` file in the root directory:
-```env
-GEMINI_API_KEY=your_gemini_key
-SAFEPAY_PUBLIC_KEY=pub_...
-SAFEPAY_SECRET_KEY=sec_...
+### 2. Clone the Repository
+```bash
+git clone https://github.com/YOUR-USERNAME/medflow_deliverable.git
+cd medflow_deliverable
 ```
 
-### 3. Launch the Platform
-Run the entire stack using Docker Compose:
+### 3. Configure API Keys
+To run the AI synthesis and authentication, you must provide your own API keys.
+Open `docker-compose.yml` and replace the placeholder values under the `backend` and `frontend` environments:
+
+- `GEMINI_API_KEY=Your_Google_Gemini_Key`
+- `NEXT_PUBLIC_FIREBASE_API_KEY=Your_Firebase_Config_Key`
+- `SAFEPAY_PUBLIC_KEY=Your_Safepay_Public_Key`
+- `SAFEPAY_SECRET_KEY=Your_Safepay_Secret_Key`
+
+*(Note: The system will run without these, but AI features and Doctor Login require valid keys to function.)*
+
+### 4. Build and Run the Containers
+With Docker Desktop running, execute the following command in the root folder:
+
 ```bash
 docker-compose up -d --build
 ```
+This will download all necessary dependencies and spin up 4 containers:
+1. `frontend` (Next.js)
+2. `backend` (FastAPI)
+3. `mysql` (Relational DB)
+4. `neo4j` (Graph DB)
 
-### 4. Access Points
-* **Patient Portal**: `http://localhost:3000`
-* **Doctor Dashboard**: `http://localhost:3000/doctor/login`
-* **Backend API Docs**: `http://localhost:8000/docs`
+*(The first build may take 3-5 minutes depending on your internet speed.)*
+
+### 5. Access the Platform
+Once the containers are running:
+- **Patient Booking Portal:** [http://localhost:3000](http://localhost:3000)
+- **Doctor Dashboard:** [http://localhost:3000/doctor/login](http://localhost:3000/doctor/login)
+- **Backend API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Neo4j Graph Dashboard:** [http://localhost:7474](http://localhost:7474)
 
 ---
 
-## ⚙️ Workflow Automation (n8n)
+## 🤝 Contributing
+Feel free to fork this repository, submit Pull Requests, or open Issues for any bugs or feature requests!
 
-MedFlow relies on n8n for background automation. The system automatically triggers webhooks for events like:
-1. **Appointment Approval**: Extracts patient data and routes a confirmation email.
-2. **Prescription Issuance**: Generates and emails a beautiful HTML digital prescription.
-3. **Medical Billing**: Emails Safepay payment links for automated revenue collection.
-
----
-<p align="center">
-  <em>Built with ❤️ for the future of healthcare.</em>
-</p>
+> **Note:** The n8n automation layer has been decoupled from this open-source release to keep the codebase clean and lightweight.

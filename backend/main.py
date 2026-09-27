@@ -172,24 +172,6 @@ def update_appointment_status(appointment_id: int, status_update: schemas.Appoin
     db.commit()
     db.refresh(db_appointment)
 
-    # TRIGGER n8n WEBHOOK FOR SMS when doctor approves (frontend sends "Confirmed")
-    if status_update.status == "Confirmed":
-        patient = db.query(models.Patient).filter(models.Patient.patient_id == db_appointment.patient_id).first()
-        if patient:
-            webhook_url = "http://host.docker.internal:5678/webhook/appointment-approved"
-            payload = {
-                "patient_name": patient.name,
-                "patient_email": patient.email or "",
-                "patient_phone": patient.contact_info,
-                "appointment_date": db_appointment.date,
-                "appointment_time": db_appointment.time
-            }
-            try:
-                import requests
-                requests.post(webhook_url, json=payload, timeout=2)
-            except Exception as e:
-                print(f"Failed to trigger n8n webhook: {e}")
-
     return db_appointment
 
 @app.post("/api/prescriptions", response_model=schemas.PrescriptionResponse)
@@ -208,29 +190,6 @@ def create_prescription(prescription: schemas.PrescriptionCreate, db: Session = 
     db.add(db_prescription)
     db.commit()
     db.refresh(db_prescription)
-
-    # TRIGGER n8n WEBHOOK to send prescription report email
-    patient = db.query(models.Patient).filter(models.Patient.patient_id == prescription.patient_id).first()
-    if patient and patient.email:
-        try:
-            import requests as req
-            import datetime
-            req.post(
-                "http://host.docker.internal:5678/webhook/prescription-issued",
-                json={
-                    "patient_name": patient.name,
-                    "patient_email": patient.email,
-                    "patient_phone": patient.contact_info,
-                    "doctor_name": doctor.name,
-                    "doctor_specialty": doctor.specialty or "General Physician",
-                    "medication_details": prescription.medication_details,
-                    "instructions": prescription.instructions,
-                    "issued_date": datetime.date.today().strftime("%B %d, %Y")
-                },
-                timeout=3
-            )
-        except Exception as e:
-            print(f"Prescription webhook failed: {e}")
 
     return db_prescription
 
@@ -509,23 +468,6 @@ def create_billing(billing: schemas.BillingCreate, db: Session = Depends(get_db)
     db.refresh(db_bill)
 
 
-    # --- TRIGGER N8N AUTOMATED INVOICE EMAIL ---
-    try:
-        patient = db.query(models.Patient).filter(models.Patient.patient_id == billing.patient_id).first()
-        if patient and getattr(patient, "email", None):
-            webhook_url = "http://host.docker.internal:5678/webhook/billing-issued"
-            payload = {
-                "patient_name": patient.name,
-                "patient_email": patient.email,
-                "patient_phone": patient.contact_info,
-                "amount": billing.amount,
-                "payment_link": checkout_url,
-                "billing_id": db_bill.billing_id
-            }
-            requests.post(webhook_url, json=payload, timeout=3)
-    except Exception as e:
-        print(f"Failed to trigger billing webhook: {e}")
-
     return db_bill
 
 # --- SAFEPAY WEBHOOK: Called by Safepay when patient completes payment ---
@@ -583,21 +525,6 @@ async def safepay_webhook(request: Request, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_bill)
     
-    # Trigger n8n payment confirmation email webhook
-    try:
-        patient = db.query(models.Patient).filter(models.Patient.patient_id == db_bill.patient_id).first()
-        if patient and getattr(patient, "email", None):
-            webhook_url = "http://host.docker.internal:5678/webhook/billing-paid"
-            n8n_payload = {
-                "patient_name": patient.name,
-                "patient_email": patient.email,
-                "amount": db_bill.amount,
-                "billing_id": db_bill.billing_id
-            }
-            requests.post(webhook_url, json=n8n_payload, timeout=3)
-    except Exception as e:
-        print(f"Failed to trigger payment webhook: {e}")
-        
     return {"status": "success", "billing_id": db_bill.billing_id}
 
 @app.get("/api/billing/stats")
